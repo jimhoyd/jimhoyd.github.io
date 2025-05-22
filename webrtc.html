@@ -2,104 +2,99 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>WebRTC Demo with Google STUN/TURN</title>
+  <title>WebRTC Video Chat with Google STUN/TURN</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    textarea { width: 100%; height: 100px; margin-bottom: 10px; }
-    button { margin-right: 10px; }
+    video { width: 45%; margin: 10px; border: 1px solid #ccc; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
   </style>
 </head>
 <body>
+  <h2>WebRTC Video Chat (Manual Signaling)</h2>
 
-<h2>WebRTC Manual Signaling Demo</h2>
+  <video id="localVideo" autoplay muted></video>
+  <video id="remoteVideo" autoplay></video>
 
-<button id="create-offer">Create Offer</button>
-<button id="create-answer">Create Answer</button>
+  <div>
+    <button id="start">Start Camera</button>
+    <button id="createOffer">Create Offer</button>
+    <button id="createAnswer">Create Answer</button>
+  </div>
 
-<h3>Local Description</h3>
-<textarea id="local-desc" readonly></textarea>
+  <h3>Local Description</h3>
+  <textarea id="localDesc" readonly></textarea>
 
-<h3>Remote Description</h3>
-<textarea id="remote-desc"></textarea>
-<button id="set-remote-desc">Set Remote Description</button>
+  <h3>Remote Description</h3>
+  <textarea id="remoteDesc"></textarea>
+  <button id="setRemoteDesc">Set Remote Description</button>
 
-<h3>ICE Candidates (send to peer)</h3>
-<textarea id="ice-out" readonly></textarea>
+  <h3>ICE Candidates (send to peer)</h3>
+  <textarea id="iceOut" readonly></textarea>
 
-<h3>Remote ICE Candidate</h3>
-<textarea id="ice-in"></textarea>
-<button id="add-ice">Add ICE Candidate</button>
+  <h3>Remote ICE Candidates</h3>
+  <textarea id="iceIn"></textarea>
+  <button id="addIce">Add ICE Candidates</button>
 
-<script>
-let pc = new RTCPeerConnection({
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    {
-      urls: 'turn:relay.metered.ca:443',
-      username: 'openai',
-      credential: 'openai123'
-    }
-  ]
-});
+  <script>
+    let pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:relay.metered.ca:443',
+          username: 'openai',
+          credential: 'openai123'
+        }
+      ]
+    });
 
-let localDescElem = document.getElementById('local-desc');
-let remoteDescElem = document.getElementById('remote-desc');
-let iceOutElem = document.getElementById('ice-out');
-let iceInElem = document.getElementById('ice-in');
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const localDesc = document.getElementById('localDesc');
+    const remoteDesc = document.getElementById('remoteDesc');
+    const iceOut = document.getElementById('iceOut');
+    const iceIn = document.getElementById('iceIn');
 
-pc.onicecandidate = ({candidate}) => {
-  if (candidate) {
-    iceOutElem.value += JSON.stringify(candidate) + '\n';
-  }
-};
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) iceOut.value += JSON.stringify(candidate) + '\n';
+    };
 
-pc.onconnectionstatechange = () => {
-  console.log('Connection State:', pc.connectionState);
-};
+    pc.ontrack = (event) => {
+      remoteVideo.srcObject = event.streams[0];
+    };
 
-pc.oniceconnectionstatechange = () => {
-  console.log('ICE State:', pc.iceConnectionState);
-};
+    document.getElementById('start').onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      localVideo.srcObject = stream;
+    };
 
-document.getElementById('create-offer').onclick = async () => {
-  const dataChannel = pc.createDataChannel('chat');
-  dataChannel.onopen = () => console.log('DataChannel open');
-  dataChannel.onmessage = (e) => console.log('Message:', e.data);
+    document.getElementById('createOffer').onclick = async () => {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      localDesc.value = JSON.stringify(pc.localDescription);
+    };
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  localDescElem.value = JSON.stringify(pc.localDescription);
-};
+    document.getElementById('createAnswer').onclick = async () => {
+      const offer = JSON.parse(remoteDesc.value);
+      await pc.setRemoteDescription(offer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      localDesc.value = JSON.stringify(pc.localDescription);
+    };
 
-document.getElementById('create-answer').onclick = async () => {
-  pc.ondatachannel = (event) => {
-    const channel = event.channel;
-    channel.onopen = () => console.log('DataChannel open');
-    channel.onmessage = (e) => console.log('Message:', e.data);
-  };
+    document.getElementById('setRemoteDesc').onclick = async () => {
+      const desc = JSON.parse(remoteDesc.value);
+      await pc.setRemoteDescription(desc);
+    };
 
-  const offer = JSON.parse(remoteDescElem.value);
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  localDescElem.value = JSON.stringify(pc.localDescription);
-};
-
-document.getElementById('set-remote-desc').onclick = async () => {
-  const desc = JSON.parse(remoteDescElem.value);
-  await pc.setRemoteDescription(desc);
-};
-
-document.getElementById('add-ice').onclick = async () => {
-  const lines = iceInElem.value.trim().split('\n');
-  for (const line of lines) {
-    if (line) {
-      const candidate = new RTCIceCandidate(JSON.parse(line));
-      await pc.addIceCandidate(candidate);
-    }
-  }
-};
-</script>
-
+    document.getElementById('addIce').onclick = async () => {
+      const lines = iceIn.value.trim().split('\n');
+      for (const line of lines) {
+        if (line) {
+          const candidate = new RTCIceCandidate(JSON.parse(line));
+          await pc.addIceCandidate(candidate);
+        }
+      }
+    };
+  </script>
 </body>
 </html>
