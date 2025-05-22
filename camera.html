@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Camera Capture App</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    video, canvas { max-width: 100%; margin-bottom: 10px; }
+    #controls { margin-bottom: 10px; }
+    button, select { margin-right: 10px; }
+  </style>
+</head>
+<body>
+
+<h2>Camera App</h2>
+
+<div id="controls">
+  <label for="cameraSelect">Select Camera:</label>
+  <select id="cameraSelect"></select>
+  <button id="capturePhoto">📸 Capture Photo</button>
+  <button id="toggleRecording">🎥 Start Recording</button>
+</div>
+
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas" style="display:none;"></canvas>
+<div id="downloads"></div>
+
+<script>
+let video = document.getElementById('video');
+let canvas = document.getElementById('canvas');
+let cameraSelect = document.getElementById('cameraSelect');
+let captureBtn = document.getElementById('capturePhoto');
+let toggleRecordBtn = document.getElementById('toggleRecording');
+let downloads = document.getElementById('downloads');
+
+let currentStream;
+let mediaRecorder;
+let recordedChunks = [];
+
+async function getCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const videoInputs = devices.filter(device => device.kind === 'videoinput');
+  cameraSelect.innerHTML = '';
+  videoInputs.forEach((device, index) => {
+    const option = document.createElement('option');
+    option.value = device.deviceId;
+    option.text = device.label || `Camera ${index + 1}`;
+    cameraSelect.appendChild(option);
+  });
+}
+
+async function startCamera(deviceId) {
+  if (currentStream) {
+    currentStream.getTracks().forEach(track => track.stop());
+  }
+  const constraints = {
+    video: { deviceId: deviceId ? { exact: deviceId } : undefined },
+    audio: true
+  };
+  currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = currentStream;
+}
+
+cameraSelect.addEventListener('change', () => {
+  startCamera(cameraSelect.value);
+});
+
+captureBtn.addEventListener('click', () => {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'photo.png';
+    a.textContent = '📷 Download Photo';
+    downloads.appendChild(a);
+    downloads.appendChild(document.createElement('br'));
+  });
+});
+
+toggleRecordBtn.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    toggleRecordBtn.textContent = '🎥 Start Recording';
+  } else {
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(currentStream);
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'video.webm';
+      a.textContent = '🎞️ Download Video';
+      downloads.appendChild(a);
+      downloads.appendChild(document.createElement('br'));
+    };
+    mediaRecorder.start();
+    toggleRecordBtn.textContent = '⏹️ Stop Recording';
+  }
+});
+
+(async () => {
+  await getCameras();
+  await startCamera(cameraSelect.value);
+})();
+</script>
+
+</body>
+</html>
