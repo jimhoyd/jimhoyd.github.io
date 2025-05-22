@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>WebRTC Demo with Google STUN/TURN</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    textarea { width: 100%; height: 100px; margin-bottom: 10px; }
+    button { margin-right: 10px; }
+  </style>
+</head>
+<body>
+
+<h2>WebRTC Manual Signaling Demo</h2>
+
+<button id="create-offer">Create Offer</button>
+<button id="create-answer">Create Answer</button>
+
+<h3>Local Description</h3>
+<textarea id="local-desc" readonly></textarea>
+
+<h3>Remote Description</h3>
+<textarea id="remote-desc"></textarea>
+<button id="set-remote-desc">Set Remote Description</button>
+
+<h3>ICE Candidates (send to peer)</h3>
+<textarea id="ice-out" readonly></textarea>
+
+<h3>Remote ICE Candidate</h3>
+<textarea id="ice-in"></textarea>
+<button id="add-ice">Add ICE Candidate</button>
+
+<script>
+let pc = new RTCPeerConnection({
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    {
+      urls: 'turn:relay.metered.ca:443',
+      username: 'openai',
+      credential: 'openai123'
+    }
+  ]
+});
+
+let localDescElem = document.getElementById('local-desc');
+let remoteDescElem = document.getElementById('remote-desc');
+let iceOutElem = document.getElementById('ice-out');
+let iceInElem = document.getElementById('ice-in');
+
+pc.onicecandidate = ({candidate}) => {
+  if (candidate) {
+    iceOutElem.value += JSON.stringify(candidate) + '\n';
+  }
+};
+
+pc.onconnectionstatechange = () => {
+  console.log('Connection State:', pc.connectionState);
+};
+
+pc.oniceconnectionstatechange = () => {
+  console.log('ICE State:', pc.iceConnectionState);
+};
+
+document.getElementById('create-offer').onclick = async () => {
+  const dataChannel = pc.createDataChannel('chat');
+  dataChannel.onopen = () => console.log('DataChannel open');
+  dataChannel.onmessage = (e) => console.log('Message:', e.data);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  localDescElem.value = JSON.stringify(pc.localDescription);
+};
+
+document.getElementById('create-answer').onclick = async () => {
+  pc.ondatachannel = (event) => {
+    const channel = event.channel;
+    channel.onopen = () => console.log('DataChannel open');
+    channel.onmessage = (e) => console.log('Message:', e.data);
+  };
+
+  const offer = JSON.parse(remoteDescElem.value);
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  localDescElem.value = JSON.stringify(pc.localDescription);
+};
+
+document.getElementById('set-remote-desc').onclick = async () => {
+  const desc = JSON.parse(remoteDescElem.value);
+  await pc.setRemoteDescription(desc);
+};
+
+document.getElementById('add-ice').onclick = async () => {
+  const lines = iceInElem.value.trim().split('\n');
+  for (const line of lines) {
+    if (line) {
+      const candidate = new RTCIceCandidate(JSON.parse(line));
+      await pc.addIceCandidate(candidate);
+    }
+  }
+};
+</script>
+
+</body>
+</html>
