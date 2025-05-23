@@ -2,28 +2,66 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>WebRTC Video Chat with TURN, QR & Scanner</title>
+  <title>WebRTC Video Conference with TURN, QR & Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    video { width: 45%; margin: 10px; border: 1px solid #ccc; }
-    textarea { width: 90%; height: 80px; margin: 5px 0; }
-    button { margin: 5px; }
-    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-    canvas { margin: 10px auto; display: block; }
-    #qr-reader { width: 300px; margin: auto; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 10px;
+      margin: 0;
+      background: #f9f9f9;
+    }
+    h2 {
+      font-size: 1.2rem;
+    }
+    #videos {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    video {
+      width: 100%;
+      max-width: 300px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    textarea {
+      width: 100%;
+      height: 80px;
+      margin-top: 10px;
+      font-size: 0.9rem;
+    }
+    button {
+      padding: 10px;
+      margin: 5px;
+      font-size: 0.9rem;
+    }
+    canvas {
+      margin: 10px auto;
+      display: block;
+    }
+    #qr-reader {
+      width: 100%;
+      max-width: 320px;
+      margin: 20px auto;
+    }
   </style>
 </head>
 <body>
-  <h2>WebRTC Video Chat with TURN, QR & Scanner</h2>
+  <h2>WebRTC Video Conference with TURN, QR & Scanner</h2>
 
-  <video id="localVideo" autoplay muted playsinline></video>
-  <video id="remoteVideo" autoplay playsinline></video>
+  <div id="videos">
+    <video id="localVideo" autoplay muted playsinline></video>
+  </div>
 
   <div>
     <button id="start">Start Camera</button>
-    <button id="call">Create Offer</button>
-    <button id="answer">Create Answer</button>
+    <button id="createRoom">Create Room</button>
+    <button id="joinRoom">Join Room</button>
   </div>
 
   <textarea id="signaling" placeholder="Paste or copy signaling data here..."></textarea><br>
@@ -35,40 +73,66 @@
     const signaling = document.getElementById('signaling');
     const qrCanvas = document.getElementById('qr');
     const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
+    const videos = document.getElementById('videos');
 
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-          urls: 'turn:global.relay.metered.ca:443',
-          username: 'openai',
-          credential: 'webrtc'
-        }
-      ]
-    });
+    let localStream;
+    const peers = [];
 
-    const pendingCandidates = [];
-
-    pc.onicecandidate = ({ candidate }) => {
-      if (candidate) {
-        const msg = JSON.stringify({ candidate });
-        signaling.value = msg;
-        QRCode.toCanvas(qrCanvas, msg, { width: 200 });
+    const iceServers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      {
+        urls: 'turn:global.relay.metered.ca:443',
+        username: 'openai',
+        credential: 'webrtc'
       }
-    };
-
-    pc.ontrack = (event) => {
-      remoteVideo.srcObject = event.streams[0];
-    };
+    ];
 
     document.getElementById('start').onclick = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
-      localVideo.srcObject = stream;
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
     };
 
-    document.getElementById('call').onclick = async () => {
+    function createPeerConnection() {
+      const pc = new RTCPeerConnection({ iceServers });
+      const pendingCandidates = [];
+
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) {
+          const msg = JSON.stringify({ candidate });
+          signaling.value = msg;
+          QRCode.toCanvas(qrCanvas, msg, { width: 200 });
+        }
+      };
+
+      pc.ontrack = (event) => {
+        const remoteVideo = document.createElement('video');
+        remoteVideo.autoplay = true;
+        remoteVideo.playsInline = true;
+        remoteVideo.srcObject = event.streams[0];
+        remoteVideo.dataset.peerId = peers.length;
+        videos.appendChild(remoteVideo);
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          const index = peers.findIndex(p => p.pc === pc);
+          if (index !== -1) {
+            peers.splice(index, 1);
+            const vid = videos.querySelector(`video[data-peer-id="${index}"]`);
+            if (vid) videos.removeChild(vid);
+          }
+        }
+      };
+
+      return { pc, pendingCandidates };
+    }
+
+    document.getElementById('createRoom').onclick = async () => {
+      const { pc, pendingCandidates } = createPeerConnection();
+      peers.push({ pc, pendingCandidates });
+
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       const msg = JSON.stringify({ sdp: pc.localDescription });
@@ -76,7 +140,10 @@
       QRCode.toCanvas(qrCanvas, msg, { width: 200 });
     };
 
-    document.getElementById('answer').onclick = async () => {
+    document.getElementById('joinRoom').onclick = async () => {
+      const { pc, pendingCandidates } = createPeerConnection();
+      peers.push({ pc, pendingCandidates });
+
       const data = JSON.parse(signaling.value);
       if (data.sdp) {
         await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -90,16 +157,18 @@
 
     document.getElementById('send').onclick = async () => {
       const data = JSON.parse(signaling.value);
-      if (data.sdp) {
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        while (pendingCandidates.length > 0) {
-          await pc.addIceCandidate(pendingCandidates.shift());
-        }
-      } else if (data.candidate) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (e) {
-          pendingCandidates.push(data.candidate);
+      for (const { pc, pendingCandidates } of peers) {
+        if (data.sdp) {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          while (pendingCandidates.length > 0) {
+            await pc.addIceCandidate(pendingCandidates.shift());
+          }
+        } else if (data.candidate) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (e) {
+            pendingCandidates.push(data.candidate);
+          }
         }
       }
     };
