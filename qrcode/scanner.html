@@ -12,7 +12,7 @@
 </head>
 <body>
   <div id="reader"></div>
-  <div id="result">Waiting for scans...</div>
+  <div id="result"></div>
 
   <script>
     const resultDiv = document.getElementById('result');
@@ -21,7 +21,7 @@
     function onScanSuccess(decodedText, decodedResult) {
       if (!scannedSet.has(decodedText)) {
         scannedSet.add(decodedText);
-        resultDiv.textContent += `Scanned: ${decodedText}\n`;
+        resultDiv.textContent += `${decodedText}`;
       }
     }
 
