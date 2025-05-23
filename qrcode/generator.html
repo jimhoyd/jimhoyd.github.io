@@ -10,8 +10,8 @@
   </style>
 </head>
 <body>
-  <div id="info"></div>
   <canvas id="qrcode"></canvas>
+  <div id="info"></div>
 
   <script>
     function getQueryParam(name) {
@@ -24,8 +24,8 @@
     const canvas = document.getElementById('qrcode');
 
     if (data) {
-      info.innerText = `"${data}"`;
-      QRCode.toCanvas(canvas, data, { width: 256 }, function (error) {
+      info.innerText = `${data}`;
+      QRCode.toCanvas(canvas, data, { width: 512 }, function (error) {
         if (error) console.error(error);
       });
     } else {
