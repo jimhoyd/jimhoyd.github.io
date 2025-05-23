@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Code Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
+    #reader { width: 300px; margin: auto; }
+    #result { margin-top: 20px; font-size: 1.2em; color: green; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="reader"></div>
+  <div id="result">Waiting for scans...</div>
+
+  <script>
+    const resultDiv = document.getElementById('result');
+    const scannedSet = new Set();
+
+    function onScanSuccess(decodedText, decodedResult) {
+      if (!scannedSet.has(decodedText)) {
+        scannedSet.add(decodedText);
+        resultDiv.textContent += `Scanned: ${decodedText}\n`;
+      }
+    }
+
+    function onScanFailure(error) {
+      // Silently ignore scan failures to keep scanning
+    }
+
+    const html5QrCode = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(cameras => {
+      if (cameras && cameras.length) {
+        html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          onScanSuccess,
+          onScanFailure
+        );
+      } else {
+        resultDiv.textContent = "No cameras found.";
+      }
+    }).catch(err => {
+      resultDiv.textContent = `Camera error: ${err}`;
+    });
+  </script>
+</body>
+</html>
