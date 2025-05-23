@@ -10,7 +10,6 @@
   </style>
 </head>
 <body>
-  <h2>QR Code Generator from Query Parameter</h2>
   <div id="info"></div>
   <canvas id="qrcode"></canvas>
 
@@ -25,7 +24,7 @@
     const canvas = document.getElementById('qrcode');
 
     if (data) {
-      info.innerText = `Generating QR for: "${data}"`;
+      info.innerText = `"${data}"`;
       QRCode.toCanvas(canvas, data, { width: 256 }, function (error) {
         if (error) console.error(error);
       });
