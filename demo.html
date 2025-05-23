@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebRTC Video Chat with TURN, QR & Scanner</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    video { width: 45%; margin: 10px; border: 1px solid #ccc; }
+    textarea { width: 90%; height: 80px; margin: 5px 0; }
+    button { margin: 5px; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    canvas { margin: 10px auto; display: block; }
+    #qr-reader { width: 300px; margin: auto; }
+  </style>
+</head>
+<body>
+  <h2>WebRTC Video Chat with TURN, QR & Scanner</h2>
+
+  <video id="localVideo" autoplay muted playsinline></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <div>
+    <button id="start">Start Camera</button>
+    <button id="call">Create Offer</button>
+    <button id="answer">Create Answer</button>
+  </div>
+
+  <textarea id="signaling" placeholder="Paste or copy signaling data here..."></textarea><br>
+  <button id="send">Apply</button>
+  <canvas id="qr"></canvas>
+  <div id="qr-reader"></div>
+
+  <script>
+    const signaling = document.getElementById('signaling');
+    const qrCanvas = document.getElementById('qr');
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:global.relay.metered.ca:443',
+          username: 'openai',
+          credential: 'webrtc'
+        }
+      ]
+    });
+
+    const pendingCandidates = [];
+
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) {
+        const msg = JSON.stringify({ candidate });
+        signaling.value = msg;
+        QRCode.toCanvas(qrCanvas, msg, { width: 200 });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      remoteVideo.srcObject = event.streams[0];
+    };
+
+    document.getElementById('start').onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      localVideo.srcObject = stream;
+    };
+
+    document.getElementById('call').onclick = async () => {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const msg = JSON.stringify({ sdp: pc.localDescription });
+      signaling.value = msg;
+      QRCode.toCanvas(qrCanvas, msg, { width: 200 });
+    };
+
+    document.getElementById('answer').onclick = async () => {
+      const data = JSON.parse(signaling.value);
+      if (data.sdp) {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        const msg = JSON.stringify({ sdp: pc.localDescription });
+        signaling.value = msg;
+        QRCode.toCanvas(qrCanvas, msg, { width: 200 });
+      }
+    };
+
+    document.getElementById('send').onclick = async () => {
+      const data = JSON.parse(signaling.value);
+      if (data.sdp) {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        while (pendingCandidates.length > 0) {
+          await pc.addIceCandidate(pendingCandidates.shift());
+        }
+      } else if (data.candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (e) {
+          pendingCandidates.push(data.candidate);
+        }
+      }
+    };
+
+    const scanner = new Html5Qrcode("qr-reader");
+    Html5Qrcode.getCameras().then(devices => {
+      if (devices && devices.length) {
+        scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          text => {
+            signaling.value = text;
+            document.getElementById('send').click();
+          },
+          error => {}
+        );
+      }
+    });
+  </script>
+</body>
+</html>
