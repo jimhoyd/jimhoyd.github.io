@@ -5,10 +5,30 @@
   <title>QR Code Scanner</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
-    #reader { width: 300px; margin: auto; }
-    #result { margin-top: 20px; font-size: 1.2em; color: green; white-space: pre-wrap; }
-  </style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #reader {
+      height: 100%;
+      width: 100%;
+    }
+    #result {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      color: #0f0;
+      padding: 10px;
+      font-size: 1rem;
+      text-align: left;
+      white-space: pre-wrap;
+      box-sizing: border-box;
+    }  </style>
 </head>
 <body>
   <div id="reader"></div>
