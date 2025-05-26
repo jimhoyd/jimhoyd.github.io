@@ -1,49 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>QR Code Scanner</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Continuous QR Code Scanner with jsQR</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
-    #reader { width: 300px; margin: auto; }
-    #result { margin-top: 20px; font-size: 1.2em; color: green; white-space: pre-wrap; }
+    body { font-family: sans-serif; text-align: center; }
+    video { width: 100%; max-width: 400px; border: 1px solid #ccc; }
+    canvas { display: none; }
+    #result { font-size: 1.2rem; margin-top: 10px; color: green; }
   </style>
 </head>
 <body>
-  <div id="reader"></div>
-  <div id="result"></div>
+  <h1>QR Code Scanner (Continuous)</h1>
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="canvas"></canvas>
+  <p id="result">Waiting for QR code...</p>
 
+  <script src="https://unpkg.com/jsqr"></script>
   <script>
-    const resultDiv = document.getElementById('result');
-    const scannedSet = new Set();
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const context = canvas.getContext("2d");
+    const result = document.getElementById("result");
 
-    function onScanSuccess(decodedText, decodedResult) {
-      if (!scannedSet.has(decodedText)) {
-        scannedSet.add(decodedText);
-        resultDiv.textContent += `${decodedText}`;
+    // Start video
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => {
+        video.srcObject = stream;
+        video.play();
+        requestAnimationFrame(scanFrame);
+      }).catch(err => {
+        result.textContent = "Error: " + err;
+      });
+
+    function scanFrame() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+
+        if (code) {
+          // Draw a box around the QR code
+          drawLine(code.location.topLeftCorner, code.location.topRightCorner, "red");
+          drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "red");
+          drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "red");
+          drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "red");
+
+          result.textContent = `QR Code: ${code.data}`;
+        } else {
+          result.textContent = "Scanning...";
+        }
       }
+      requestAnimationFrame(scanFrame);
     }
 
-    function onScanFailure(error) {
-      // Silently ignore scan failures to keep scanning
+    function drawLine(begin, end, color) {
+      context.beginPath();
+      context.moveTo(begin.x, begin.y);
+      context.lineTo(end.x, end.y);
+      context.lineWidth = 4;
+      context.strokeStyle = color;
+      context.stroke();
     }
-
-    const html5QrCode = new Html5Qrcode("reader");
-    Html5Qrcode.getCameras().then(cameras => {
-      if (cameras && cameras.length) {
-        html5QrCode.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: 250 },
-          onScanSuccess,
-          onScanFailure
-        );
-      } else {
-        resultDiv.textContent = "No cameras found.";
-      }
-    }).catch(err => {
-      resultDiv.textContent = `Camera error: ${err}`;
-    });
   </script>
 </body>
 </html>
