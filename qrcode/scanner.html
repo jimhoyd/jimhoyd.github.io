@@ -24,6 +24,15 @@
     const context = canvas.getContext("2d");
     const result = document.getElementById("result");
 
+    function isValidUrl(string) {
+      try {
+        new URL(string);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    
     // Start video
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       .then(stream => {
@@ -52,7 +61,7 @@
           drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "red");
           drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "red");
 
-          if (code.data.startsWith('https://')) {
+          if (isValidUrl(code.data)) {
             window.location.href = code.data;
           } else {
             result.textContent = `QR Code: ${code.data}`;
