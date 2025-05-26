@@ -52,7 +52,11 @@
           drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "red");
           drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "red");
 
-          result.textContent = `QR Code: ${code.data}`;
+          if (code.data.startsWith('https://')) {
+            window.location.href = code.data;
+          } else {
+            result.textContent = `QR Code: ${code.data}`;
+          }          
         } else {
           result.textContent = "Scanning...";
         }
